@@ -55,7 +55,7 @@ namespace Steam_Desktop_Authenticator
 
             console.OutputDataReceived += (sender, e) =>
             {
-                if (e.Data.Contains(">@") || !OutputToConsole || e.Data == "") return;
+                if (e.Data == null || e.Data.Contains(">@") || !OutputToConsole || e.Data == "") return;
                 if (OutputToConsole)
                     Console.WriteLine(e.Data);
                 if (OutputToLog)
@@ -89,29 +89,15 @@ namespace Steam_Desktop_Authenticator
             }
             
             CheckAdbVersion();
-            bool root = IsRooted();
-
-            //root = false; // DEBUG ///////////////////////
+            bool root = false;
 
             SteamGuardAccount acc;
             string json = null;
 
-            if (root)
-            {
-                if (!skipChecks && !SteamAppInstalled()) {
-                    OnPhoneBridgeError("Steam Community app not installed");
-                }
-                else {
-                    OnOutputLog("Using root method");
-                    json = PullJson(id); 
-                }
-            }
-            else
-            {
-                OnOutputLog("Steam has blocked the non-root method of copying data from their app.");
-                OnOutputLog("Your phone must now be rooted to use this.");
-                //json = PullJsonNoRoot(id);
-            }
+
+            OnOutputLog("Trying non Root extract method...");
+            json = PullJsonNoRoot(id);
+            
 
             if (json == null)
                 return null;
@@ -259,11 +245,6 @@ namespace Steam_Desktop_Authenticator
             ExecuteCommand("adb pull /sdcard/steamauth/apps/$STEAMAPP/f steamguard/ & echo Done");
             mre.Wait();
 
-            mre.Reset();
-            OnOutputLog("Extracting (5/5)");
-            ExecuteCommand("adb shell \"rm -dR /sdcard/steamauth\" & echo Done");
-            mre.Wait();
-
             string[] files = Directory.EnumerateFiles("steamguard").ToArray<string>();
             for (int i = 0; i < files.Length; i++)
             {
@@ -277,7 +258,7 @@ namespace Steam_Desktop_Authenticator
             }
             else
             {
-                json = File.ReadAllText("steamguard/Steamguard-" + sid);
+                json = File.ReadAllText("steamguard/Steamguard-" + files[0]);
             }
 
             console.OutputDataReceived -= f1;
@@ -381,35 +362,6 @@ namespace Steam_Desktop_Authenticator
             console.OutputDataReceived -= f1;
 
             return ins;
-        }
-
-        private bool IsRooted()
-        {
-            OnOutputLog("Checking root");
-            bool root = false;
-            ManualResetEventSlim mre = new ManualResetEventSlim();
-            DataReceivedEventHandler f1 = (sender, e) =>
-            {
-                if (e.Data.Contains(">@") || e.Data == "") return;
-                if (e.Data.Contains("Yes"))
-                    root = true;
-                mre.Set();
-            };
-
-            console.OutputDataReceived += f1;
-
-            if (UseLegacyAdbMethod()) {
-                ExecuteCommand("adb shell su -c 'echo Yes'");
-            }
-            else {
-                ExecuteCommand("adb shell -n su -c 'echo Yes'");
-            }
-            
-            mre.Wait();
-
-            console.OutputDataReceived -= f1;
-
-            return root;
         }
         
         private void CheckAdbVersion()
